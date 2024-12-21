@@ -1,0 +1,1282 @@
+### File: info.php ###
+<?php
+phpinfo();
+?>
+
+================================================================================
+
+### File: merge_file.py ###
+import os
+
+# Tentukan direktori root berdasarkan struktur folder baru
+root_directory = "./"  # Ganti dengan path direktori Anda jika perlu
+output_file = "output.txt"  # Nama file output
+
+# Fungsi untuk memproses semua file dalam direktori dan subdirektori
+def process_directory(directory, outfile):
+    for root, _, files in os.walk(directory):
+        for filename in files:
+            file_path = os.path.join(root, filename)
+            
+            # Hanya proses file yang benar-benar file (bukan direktori)
+            if os.path.isfile(file_path):
+                try:
+                    # Tulis nama file dengan path relatif
+                    relative_path = os.path.relpath(file_path, start=root_directory)
+                    outfile.write(f"### File: {relative_path} ###\n")
+                    
+                    # Tulis isi file
+                    with open(file_path, "r", encoding="utf-8") as infile:
+                        outfile.write(infile.read())
+                    
+                    # Tambahkan pemisah antar file
+                    outfile.write("\n\n" + ("=" * 80) + "\n\n")
+                except Exception as e:
+                    print(f"Gagal membaca file {file_path}: {e}")
+
+# Buka file output untuk menulis
+with open(output_file, "w", encoding="utf-8") as outfile:
+    # Proses direktori root dan subdirektorinya
+    process_directory(root_directory, outfile)
+
+print(f"Semua file telah digabungkan ke dalam {output_file}")
+
+
+================================================================================
+
+### File: output.txt ###
+
+
+================================================================================
+
+### File: readme.md ###
+
+
+================================================================================
+
+### File: config\create_table.sql ###
+CREATE DATABASE IF NOT EXISTS uas_web;
+
+USE uas_web;
+
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255),
+    email VARCHAR(255),
+    password VARCHAR(255),
+    ip_address VARCHAR(255),
+    browser VARCHAR(255)
+);
+
+
+================================================================================
+
+### File: config\db_config.php ###
+<?php
+$servername = "localhost";
+$username = "root";
+$password = "";
+$dbname = "uas_web";
+
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+if ($conn->connect_error) {
+    die("Koneksi gagal: " . $conn->connect_error);
+}
+?>
+
+================================================================================
+
+### File: config\valorant_table.sql ###
+CREATE TABLE valorant_data (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    player_name VARCHAR(255) NOT NULL,
+    rank VARCHAR(50) NOT NULL,
+    favorite_agent VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+================================================================================
+
+### File: controllers\logout.php ###
+<?php
+session_start();
+session_destroy();
+header("Location: ../views/login.html");
+exit;
+?>
+
+================================================================================
+
+### File: controllers\user_controller.php ###
+<?php
+session_start();
+include '../config/db_config.php';
+include '../models/User.php';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $email = htmlspecialchars($_POST['email']);
+    $password = htmlspecialchars($_POST['password']);
+
+    // Validasi input
+    if (empty($email) || empty($password)) {
+        echo json_encode(["error" => "Email dan password wajib diisi."]);
+        exit;
+    }
+
+    $userModel = new User($conn);
+    $user = $userModel->findByEmail($email);
+
+    if ($user && $userModel->verifyPassword($password, $user['password'])) {
+        // Simpan data user ke session
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['user_name'] = $user['name'];
+        $_SESSION['ip_address'] = $user['ip_address'];
+        $_SESSION['browser'] = $user['browser'];
+
+        echo json_encode(["success" => "Login berhasil."]);
+    } else {
+        echo json_encode(["error" => "Email atau password salah."]);
+    }
+}
+?>
+
+================================================================================
+
+### File: controllers\valorant_controller.php ###
+<?php
+include '../config/db_config.php';
+
+header('Content-Type: application/json');
+
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    if (isset($_GET['action']) && $_GET['action'] === 'fetch') {
+        // Fetch all data
+        $query = "SELECT * FROM valorant_data";
+        $result = $conn->query($query);
+
+        $data = [];
+        while ($row = $result->fetch_assoc()) {
+            $data[] = $row;
+        }
+        echo json_encode($data);
+    }
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($_GET['action'] === 'create') {
+        // Create data
+        $player_name = htmlspecialchars($_POST['player_name']);
+        $rank = htmlspecialchars($_POST['rank']);
+        $favorite_agent = htmlspecialchars($_POST['favorite_agent']);
+
+        $stmt = $conn->prepare("INSERT INTO valorant_data (player_name, rank, favorite_agent) VALUES (?, ?, ?)");
+        $stmt->bind_param("sss", $player_name, $rank, $favorite_agent);
+
+        if ($stmt->execute()) {
+            echo json_encode(["message" => "Data berhasil ditambahkan"]);
+        } else {
+            echo json_encode(["error" => "Gagal menambahkan data"]);
+        }
+        $stmt->close();
+    } elseif ($_GET['action'] === 'update') {
+        // Update data
+        $id = intval($_POST['id']);
+        $player_name = htmlspecialchars($_POST['player_name']);
+        $rank = htmlspecialchars($_POST['rank']);
+        $favorite_agent = htmlspecialchars($_POST['favorite_agent']);
+
+        $stmt = $conn->prepare("UPDATE valorant_data SET player_name = ?, rank = ?, favorite_agent = ? WHERE id = ?");
+        $stmt->bind_param("sssi", $player_name, $rank, $favorite_agent, $id);
+
+        if ($stmt->execute()) {
+            echo json_encode(["message" => "Data berhasil diupdate"]);
+        } else {
+            echo json_encode(["error" => "Gagal mengupdate data"]);
+        }
+        $stmt->close();
+    } elseif ($_GET['action'] === 'delete') {
+        // Delete data
+        $id = intval($_POST['id']);
+
+        $stmt = $conn->prepare("DELETE FROM valorant_data WHERE id = ?");
+        $stmt->bind_param("i", $id);
+
+        if ($stmt->execute()) {
+            echo json_encode(["message" => "Data berhasil dihapus"]);
+        } else {
+            echo json_encode(["error" => "Gagal menghapus data"]);
+        }
+        $stmt->close();
+    }
+}
+
+$conn->close();
+?>
+
+================================================================================
+
+### File: models\User.php ###
+<?php
+class User
+{
+    private $conn;
+
+    public function __construct($db)
+    {
+        $this->conn = $db;
+    }
+
+    public function findByEmail($email)
+    {
+        $stmt = $this->conn->prepare("SELECT * FROM users WHERE email = ?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_assoc();
+    }
+
+    public function verifyPassword($inputPassword, $storedHash)
+    {
+        return password_verify($inputPassword, $storedHash);
+    }
+}
+?>
+
+================================================================================
+
+### File: models\Valorant.php ###
+
+
+================================================================================
+
+### File: process\process_user.php ###
+<?php
+session_start();
+include '../config/db_config.php';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = htmlspecialchars($_POST['username']);
+    $email = htmlspecialchars($_POST['email']);
+    $password = htmlspecialchars($_POST['password']);
+    $confirmPassword = htmlspecialchars($_POST['confirm_password']);
+    $ip = $_SERVER['REMOTE_ADDR'];
+    $browser = $_SERVER['HTTP_USER_AGENT'];
+
+    // Jika IPv6 localhost (::1), ganti dengan IPv4 localhost (127.0.0.1)
+    if ($ip === '::1') {
+        $ip = '127.0.0.1';
+    }
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        die("Email tidak valid.");
+    }
+
+    if ($password !== $confirmPassword) {
+        die("Password dan konfirmasi password tidak cocok.");
+    }
+
+    $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+
+    $stmt = $conn->prepare("INSERT INTO users (name, email, password, ip_address, browser) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param("sssss", $username, $email, $hashedPassword, $ip, $browser);
+
+    if ($stmt->execute()) {
+        $_SESSION['username'] = $username;
+        echo "Data berhasil disimpan.";
+    } else {
+        echo "Gagal menyimpan data: " . $stmt->error;
+    }
+
+    $stmt->close();
+} elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    $query = "SELECT name, email FROM users";
+    $result = $conn->query($query);
+
+    $users = [];
+
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $users[] = $row;
+        }
+    }
+
+    header('Content-Type: application/json');
+    echo json_encode($users);
+}
+
+$conn->close();
+?>
+
+================================================================================
+
+### File: process\process_valorant.php ###
+
+
+================================================================================
+
+### File: public\css\index.css ###
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f3f4f6;
+  min-height: 100vh;
+  color: #333;
+}
+
+.header {
+  background-color: #0d47a1;
+  color: #fff;
+  text-align: center;
+  padding: 20px 10px;
+
+  .container {
+    a {
+      color: #fff;
+      text-decoration: none;
+    }
+
+    p {
+      font-size: small;
+    }
+  }
+}
+
+.header h1 {
+  font-size: 2.5rem;
+  margin: 0;
+}
+
+.header p {
+  margin: 10px 0 0;
+  font-size: 1.2rem;
+}
+
+.navigation {
+  background-color: #007bff;
+  text-align: center;
+  padding: 10px 0;
+}
+
+.navigation ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.navigation ul li {
+  display: inline;
+}
+
+.navigation ul li a {
+  color: white;
+  text-decoration: none;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.navigation ul li a:hover {
+  text-decoration: underline;
+}
+
+.main-content {
+  padding: 20px;
+  margin: 80px auto;
+  max-width: 900px;
+  /* margin: 0 auto; */
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.main-content h2 {
+  color: #0d47a1;
+  margin-top: 0;
+}
+
+.about,
+.features,
+.get-started {
+  margin-bottom: 30px;
+}
+
+.features ul {
+  list-style: disc;
+  padding-left: 20px;
+}
+
+.cta-button {
+  display: inline-block;
+  background-color: #007bff;
+  color: white;
+  text-decoration: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+}
+
+.cta-button:hover {
+  background-color: #0056b3;
+}
+
+.footer {
+  background-color: #0d47a1;
+  color: white;
+  text-align: center;
+  padding: 10px 0;
+  margin-top: 20px;
+  font-size: 0.9rem;
+}
+
+::-webkit-scrollbar {
+  width: 0px;
+}
+
+
+================================================================================
+
+### File: public\css\style.css ###
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+  background-color: #f9f9f9;
+}
+
+h1,
+h2 {
+  text-align: center;
+  color: #333;
+}
+
+form {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 20px;
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column; /* Mengatur elemen dalam kolom */
+  gap: 15px; /* Jarak antar elemen */
+}
+
+form label {
+  display: flex; /* Mengatur label dan input dalam satu baris */
+  flex-direction: column; /* Input di bawah label */
+  font-size: 14px;
+  font-weight: bold;
+  color: #555;
+}
+
+form input[type="text"],
+form input[type="email"],
+form input[type="password"],
+button {
+  padding: 10px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  outline: none;
+}
+
+button {
+  background-color: #007bff;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+table {
+  margin: 20px auto;
+  width: 80%;
+  border-collapse: collapse;
+}
+
+table th,
+table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+/* Tambahan untuk membuat tabel lebih menarik */
+table th {
+  background-color: #007bff;
+  color: white;
+  text-transform: uppercase;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+}
+
+button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+#valorantTable {
+  margin-top: 20px;
+}
+
+.logout-button {
+  display: inline-block;
+  margin-top: 10px;
+  background-color: #ff4d4d;
+  color: white;
+  padding: 10px 15px;
+  text-decoration: none;
+  border-radius: 5px;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
+}
+
+.logout-button:hover {
+  background-color: #cc0000;
+}
+
+::-webkit-scrollbar {
+  width: 0px;
+}
+
+a {
+  text-decoration: none;
+  color: #333;
+}
+
+
+================================================================================
+
+### File: public\js\login.js ###
+document.addEventListener("DOMContentLoaded", function () {
+  const loginForm = document.getElementById("loginForm");
+  const emailInput = document.getElementById("email");
+  const passwordInput = document.getElementById("password");
+  const submitButton = loginForm.querySelector("button[type='submit']");
+  const emailError = document.getElementById("emailError");
+  const passwordError = document.getElementById("passwordError");
+
+  // Fungsi untuk validasi email
+  function validateEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // Regex untuk format email
+    return emailRegex.test(email);
+  }
+
+  // Fungsi untuk validasi password
+  function validatePassword(password) {
+    return password.length >= 8; // Password harus minimal 8 karakter
+  }
+
+  // Fungsi untuk memeriksa apakah tombol submit harus dinonaktifkan
+  function checkFormValidity() {
+    const isEmailValid = validateEmail(emailInput.value);
+    const isPasswordValid = validatePassword(passwordInput.value);
+
+    // Tampilkan atau sembunyikan pesan error untuk email
+    if (!isEmailValid && emailInput.value.trim() !== "") {
+      emailError.textContent = "Masukkan email yang valid.";
+    } else {
+      emailError.textContent = "";
+    }
+
+    // Tampilkan atau sembunyikan pesan error untuk password
+    if (!isPasswordValid && passwordInput.value.trim() !== "") {
+      passwordError.textContent = "Password harus minimal 8 karakter.";
+    } else {
+      passwordError.textContent = "";
+    }
+
+    // Atur status tombol submit
+    submitButton.disabled = !(isEmailValid && isPasswordValid);
+  }
+
+  // Event listener untuk validasi saat mengetik di email atau password
+  emailInput.addEventListener("input", checkFormValidity);
+  passwordInput.addEventListener("input", checkFormValidity);
+
+  // Event listener untuk pengiriman form
+  loginForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const formData = new FormData(loginForm);
+    fetch("../controllers/user_controller.php", {
+      method: "POST",
+      body: formData,
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.error) {
+          alert(data.error);
+        } else {
+          alert(data.success);
+          // Redirect ke halaman Valorant setelah login berhasil
+          window.location.href = "valorant.php";
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        alert("Terjadi kesalahan. Coba lagi nanti.");
+      });
+  });
+
+  // Inisialisasi: disable tombol submit saat pertama kali load
+  submitButton.disabled = true;
+});
+
+
+================================================================================
+
+### File: public\js\script.js ###
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.getElementById("userForm");
+  const usernameInput = document.getElementById("username");
+  const emailInput = document.getElementById("email");
+  const passwordInput = document.getElementById("password");
+  const confirmPasswordInput = document.getElementById("confirm_password");
+  const termsCheckbox = document.getElementById("terms");
+  const submitButton = form.querySelector("button[type='submit']");
+  const dataTable = document.getElementById("dataTable").querySelector("tbody");
+
+  // Elemen untuk pesan error
+  const usernameError = document.createElement("span");
+  const emailError = document.createElement("span");
+  const passwordError = document.createElement("span");
+  const confirmPasswordError = document.createElement("span");
+
+  // Styling error message
+  [usernameError, emailError, passwordError, confirmPasswordError].forEach(
+    (el) => {
+      el.style.color = "red";
+      el.style.fontSize = "12px";
+    }
+  );
+
+  // Tambahkan error message setelah input
+  usernameInput.parentElement.appendChild(usernameError);
+  emailInput.parentElement.appendChild(emailError);
+  passwordInput.parentElement.appendChild(passwordError);
+  confirmPasswordInput.parentElement.appendChild(confirmPasswordError);
+
+  // Validasi input
+  function validateUsername(username) {
+    return username.trim().length >= 3;
+  }
+
+  function validateEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+
+  function validatePassword(password) {
+    return password.trim().length >= 8;
+  }
+
+  function passwordsMatch(password, confirmPassword) {
+    return password === confirmPassword;
+  }
+
+  function checkFormValidity() {
+    const isUsernameValid = validateUsername(usernameInput.value);
+    const isEmailValid = validateEmail(emailInput.value);
+    const isPasswordValid = validatePassword(passwordInput.value);
+    const isConfirmPasswordValid = passwordsMatch(
+      passwordInput.value,
+      confirmPasswordInput.value
+    );
+    const isTermsChecked = termsCheckbox.checked;
+
+    // Pesan error
+    usernameError.textContent = isUsernameValid
+      ? ""
+      : "Username minimal 3 karakter.";
+    emailError.textContent = isEmailValid ? "" : "Masukkan email yang valid.";
+    passwordError.textContent = isPasswordValid
+      ? ""
+      : "Password minimal 8 karakter.";
+    confirmPasswordError.textContent = isConfirmPasswordValid
+      ? ""
+      : "Password dan konfirmasi password harus sama.";
+
+    // Tombol submit hanya aktif jika semua validasi lolos
+    submitButton.disabled = !(
+      isUsernameValid &&
+      isEmailValid &&
+      isPasswordValid &&
+      isConfirmPasswordValid &&
+      isTermsChecked
+    );
+  }
+
+  // Event listeners untuk validasi
+  usernameInput.addEventListener("input", checkFormValidity);
+  emailInput.addEventListener("input", checkFormValidity);
+  passwordInput.addEventListener("input", checkFormValidity);
+  confirmPasswordInput.addEventListener("input", checkFormValidity);
+  termsCheckbox.addEventListener("change", checkFormValidity);
+
+  // Load users untuk tabel
+  function loadUsers() {
+    fetch("../process/process_user.php", {
+      method: "GET",
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        dataTable.innerHTML = "";
+        data.forEach((user) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `<td>${user.name}</td><td>${user.email}</td>`;
+          dataTable.appendChild(row);
+        });
+      })
+      .catch((error) => {
+        console.error("Error loading users:", error);
+      });
+  }
+
+  // Submit form
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+
+    fetch("../process/process_user.php", {
+      method: "POST",
+      body: formData,
+    })
+      .then((response) => response.text())
+      .then((data) => {
+        alert(data);
+        if (data.includes("berhasil disimpan")) {
+          // Redirect ke login.html jika pendaftaran berhasil
+          window.location.href = "login.html";
+        } else {
+          loadUsers(); // Tetap load data jika tidak berhasil
+        }
+        form.reset();
+        checkFormValidity(); // Reset validasi setelah submit
+      })
+      .catch((error) => {
+        console.error("Error submitting form:", error);
+      });
+  });
+
+  // Inisialisasi: disable tombol submit saat pertama kali load
+  submitButton.disabled = true;
+
+  // Load user data
+  loadUsers();
+});
+
+
+================================================================================
+
+### File: public\js\valorant.js ###
+document.addEventListener("DOMContentLoaded", function () {
+  const valorantForm = document.getElementById("valorantForm");
+  const playerNameInput = document.getElementById("player_name");
+  const rankInput = document.getElementById("rank");
+  const favoriteAgentInput = document.getElementById("favorite_agent");
+  const submitButton = valorantForm.querySelector("button[type='submit']");
+  const valorantTable = document
+    .getElementById("valorantTable")
+    .querySelector("tbody");
+
+  let editMode = false;
+  let editId = null;
+
+  // Fungsi untuk validasi formulir
+  function checkFormValidity() {
+    const isPlayerNameValid = playerNameInput.value.trim().length > 0;
+    const isRankValid = rankInput.value.trim().length > 0;
+    const isFavoriteAgentValid = favoriteAgentInput.value.trim().length > 0;
+
+    submitButton.disabled = !(
+      isPlayerNameValid &&
+      isRankValid &&
+      isFavoriteAgentValid
+    );
+  }
+
+  function loadValorantData() {
+    fetch("../controllers/valorant_controller.php?action=fetch")
+      .then((response) => response.json())
+      .then((data) => {
+        valorantTable.innerHTML = "";
+        data.forEach((player) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+                <td>${player.player_name}</td>
+                <td>${player.rank}</td>
+                <td>${player.favorite_agent}</td>
+                <td>${player.created_at}</td>
+                <td>
+                  <button class="edit-btn" data-id="${player.id}">Edit</button>
+                  <button class="delete-btn" data-id="${player.id}">Delete</button>
+                </td>
+              `;
+          valorantTable.appendChild(row);
+        });
+        attachTableEventListeners();
+      })
+      .catch((error) => {
+        console.error("Error fetching Valorant data:", error);
+      });
+  }
+
+  function attachTableEventListeners() {
+    document.querySelectorAll(".edit-btn").forEach((btn) =>
+      btn.addEventListener("click", function () {
+        const id = this.getAttribute("data-id");
+        fetch(`../controllers/valorant_controller.php?action=fetch`)
+          .then((response) => response.json())
+          .then((data) => {
+            const player = data.find((p) => p.id == id);
+            if (player) {
+              editMode = true;
+              editId = id;
+              playerNameInput.value = player.player_name;
+              rankInput.value = player.rank;
+              favoriteAgentInput.value = player.favorite_agent;
+              submitButton.textContent = "Update Data";
+              checkFormValidity(); // Validasi ulang setelah data diisi
+            }
+          });
+      })
+    );
+
+    document.querySelectorAll(".delete-btn").forEach((btn) =>
+      btn.addEventListener("click", function () {
+        const id = this.getAttribute("data-id");
+        if (confirm("Yakin ingin menghapus data ini?")) {
+          fetch(`../controllers/valorant_controller.php?action=delete`, {
+            method: "POST",
+            body: new URLSearchParams({ id }),
+          })
+            .then((response) => response.json())
+            .then((message) => {
+              alert(message.message || message.error);
+              // Reload browser setelah data dihapus
+              window.location.reload();
+            });
+        }
+      })
+    );
+  }
+
+  valorantForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const formData = new URLSearchParams({
+      player_name: playerNameInput.value.trim(),
+      rank: rankInput.value.trim(),
+      favorite_agent: favoriteAgentInput.value.trim(),
+    });
+
+    if (editMode) {
+      formData.append("id", editId);
+      fetch(`../controllers/valorant_controller.php?action=update`, {
+        method: "POST",
+        body: formData,
+      })
+        .then((response) => response.json())
+        .then((message) => {
+          alert(message.message || message.error);
+          editMode = false;
+          editId = null;
+          submitButton.textContent = "Add Data";
+          valorantForm.reset();
+          // Reload browser setelah data diperbarui
+          window.location.reload();
+        });
+    } else {
+      fetch(`../controllers/valorant_controller.php?action=create`, {
+        method: "POST",
+        body: formData,
+      })
+        .then((response) => response.json())
+        .then((message) => {
+          alert(message.message || message.error);
+          valorantForm.reset();
+          // Reload browser setelah data ditambahkan
+          window.location.reload();
+        });
+    }
+  });
+
+  playerNameInput.addEventListener("input", checkFormValidity);
+  rankInput.addEventListener("input", checkFormValidity);
+  favoriteAgentInput.addEventListener("input", checkFormValidity);
+
+  loadValorantData();
+  checkFormValidity(); // Pastikan tombol disable pada awal load
+});
+
+
+================================================================================
+
+### File: session\session.php ###
+<?php
+session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../views/login.html");
+    exit;
+}
+
+$userName = $_SESSION['user_name'];
+?>
+
+================================================================================
+
+### File: views\index.html ###
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Valorant Web</title>
+    <link rel="stylesheet" href="../public/css/index.css" />
+    <script src="../public/js/script.js" defer></script>
+  </head>
+  <body>
+    <header class="header">
+      <div class="container">
+        <a href="index.html">Valorant Web</a>
+        <p>Platform terbaik untuk melacak statistik pemain Valorant</p>
+      </div>
+    </header>
+
+    <nav class="navigation">
+      <ul>
+        <li><a href="register.html">Daftar</a></li>
+        <li><a href="login.html">Masuk</a></li>
+        <li><a href="valorant.php">Data Valorant</a></li>
+      </ul>
+    </nav>
+
+    <main class="main-content">
+      <section class="about">
+        <h2>Tentang Valorant Web</h2>
+        <p>
+          Valorant Web adalah platform yang membantu pemain melacak statistik
+          permainan, agen favorit, dan perkembangan peringkat mereka.
+          Bergabunglah untuk menunjukkan kemampuan Anda dan terhubung dengan
+          pemain lain!
+        </p>
+      </section>
+
+      <section class="features">
+        <h2>Fitur</h2>
+        <ul>
+          <li>Melacak statistik dan perkembangan pemain.</li>
+          <li>Mendaftar akun untuk menyimpan data secara aman.</li>
+        </ul>
+      </section>
+
+      <section class="get-started">
+        <h2>Mulai Sekarang</h2>
+        <p>
+          Baik Anda pemain santai atau penggemar kompetitif, Valorant Web
+          menawarkan berbagai alat untuk meningkatkan pengalaman bermain Anda.
+        </p>
+        <a href="register.html" class="cta-button">Daftar Sekarang</a>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>&copy; 2024 Valorant Web. Semua hak dilindungi.</p>
+    </footer>
+  </body>
+</html>
+
+
+================================================================================
+
+### File: views\login.html ###
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - Valorant Web</title>
+    <link rel="stylesheet" href="../public/css/style.css" />
+    <link rel="stylesheet" href="../public/css/index.css" />
+    <script src="../public/js/login.js" defer></script>
+  </head>
+  <body>
+    <header class="header">
+      <div class="container">
+        <a href="index.html">Valorant Web</a>
+        <p>Platform terbaik untuk melacak statistik pemain Valorant</p>
+      </div>
+    </header>
+
+    <nav class="navigation">
+      <ul>
+        <li><a href="register.html">Daftar</a></li>
+        <li><a href="login.html">Masuk</a></li>
+        <li><a href="valorant.php">Data Valorant</a></li>
+      </ul>
+    </nav>
+
+    <h1>Login Akun</h1>
+    <form id="loginForm">
+      <label>
+        Email:
+        <input type="email" name="email" id="email" required />
+        <span id="emailError" style="color: red; font-size: 12px"></span>
+      </label>
+      <label>
+        Password:
+        <input type="password" name="password" id="password" required />
+        <span id="passwordError" style="color: red; font-size: 12px"></span>
+      </label>
+      <button type="submit">Masuk</button>
+    </form>
+  </body>
+</html>
+
+
+================================================================================
+
+### File: views\register.html ###
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Register - Valorant Track</title>
+    <link rel="stylesheet" href="../public/css/style.css" />
+    <link rel="stylesheet" href="../public/css/index.css" />
+    <script src="../public/js/script.js" defer></script>
+  </head>
+  <body>
+    <header class="header">
+      <div class="container">
+        <a href="index.html">Valorant Web</a>
+        <p>Platform terbaik untuk melacak statistik pemain Valorant</p>
+      </div>
+    </header>
+
+    <nav class="navigation">
+      <ul>
+        <li><a href="register.html">Daftar</a></li>
+        <li><a href="login.html">Masuk</a></li>
+        <li><a href="valorant.php">Data Valorant</a></li>
+      </ul>
+    </nav>
+
+    <h1>Daftar Akun</h1>
+
+    <form id="userForm" method="POST" action="../process/process_user.php">
+      <!-- Username -->
+      <label>
+        Username:
+        <input type="text" name="username" id="username" required />
+        <span id="usernameError" style="color: red; font-size: 12px"></span>
+      </label>
+
+      <!-- Email -->
+      <label>
+        Email:
+        <input type="email" name="email" id="email" required />
+        <span id="emailError" style="color: red; font-size: 12px"></span>
+      </label>
+
+      <!-- Password -->
+      <label>
+        Password:
+        <input type="password" name="password" id="password" required />
+        <span id="passwordError" style="color: red; font-size: 12px"></span>
+      </label>
+
+      <!-- Konfirmasi Password -->
+      <label>
+        Konfirmasi Password:
+        <input
+          type="password"
+          name="confirm_password"
+          id="confirm_password"
+          required
+        />
+        <span
+          id="confirmPasswordError"
+          style="color: red; font-size: 12px"
+        ></span>
+      </label>
+
+      <!-- Terms and Conditions -->
+      <div class="checkbox-label">
+        <input type="checkbox" id="terms" /> Saya setuju dengan syarat dan
+        ketentuan
+      </div>
+
+      <!-- Submit Button -->
+      <button type="submit" class="sign-up-btn">Daftar</button>
+    </form>
+
+    <h2>Data Pengguna</h2>
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th>Nama</th>
+          <th>Email</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </body>
+</html>
+
+
+================================================================================
+
+### File: views\valorant.php ###
+<?php include '../session/session.php'; ?>
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Valorant</title>
+  <link rel="stylesheet" href="../public/css/style.css" />
+  <script src="../public/js/valorant.js" defer></script>
+</head>
+
+<body>
+  <header>
+    <p>Welcome, <strong><?php echo htmlspecialchars($_SESSION['user_name']); ?></strong>!</p>
+    <p>IP Address: <strong><?php echo htmlspecialchars($_SESSION['ip_address']); ?></strong></p>
+    <p>Browser: <strong><?php echo htmlspecialchars($_SESSION['browser']); ?></strong></p>
+    <a href="../controllers/logout.php" class="logout-button">Logout</a>
+  </header>
+
+  <h1>Data Valorant</h1>
+
+  <form id="valorantForm" method="POST">
+    <label>
+      Player Name:
+      <input type="text" name="player_name" id="player_name" required />
+    </label>
+    <label>
+      Rank:
+      <input type="text" name="rank" id="rank" required />
+    </label>
+    <label>
+      Favorite Agent:
+      <input type="text" name="favorite_agent" id="favorite_agent" required />
+    </label>
+    <button type="submit" class="add-valorant-btn" disabled>Add Data</button>
+  </form>
+
+  <h2>Valorant Player Data</h2>
+  <table id="valorantTable">
+    <thead>
+      <tr>
+        <th>Player Name</th>
+        <th>Rank</th>
+        <th>Favorite Agent</th>
+        <th>Created At</th>
+        <th>Aksi</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <h1>Kelola State dengan Cookie dan Browser Storage</h1>
+
+  <!-- Input untuk menetapkan nilai -->
+  <form id="stateForm">
+    <label>
+      Masukkan Nilai:
+      <input type="text" id="stateInput" placeholder="Ketik sesuatu..." required />
+    </label>
+    <br><br>
+    <button type="button" id="setCookieBtn">Set Cookie</button>
+    <button type="button" id="setLocalStorageBtn">Set LocalStorage</button>
+    <button type="button" id="setSessionStorageBtn">Set SessionStorage</button>
+  </form>
+
+  <h2>Nilai yang Tersimpan</h2>
+  <p><strong>Nilai Cookie:</strong> <span id="cookieDisplay">Belum ada nilai</span></p>
+  <p><strong>Nilai LocalStorage:</strong> <span id="localStorageDisplay">Belum ada nilai</span></p>
+  <p><strong>Nilai SessionStorage:</strong> <span id="sessionStorageDisplay">Belum ada nilai</span></p>
+
+  <script>
+    // Referensi ke elemen DOM
+    const stateInput = document.getElementById("stateInput");
+    const cookieDisplay = document.getElementById("cookieDisplay");
+    const localStorageDisplay = document.getElementById("localStorageDisplay");
+    const sessionStorageDisplay = document.getElementById("sessionStorageDisplay");
+
+    // Set Cookie
+    document.getElementById("setCookieBtn").addEventListener("click", function () {
+      const value = stateInput.value;
+      if (value.trim() === "") {
+        alert("Masukkan nilai terlebih dahulu!");
+        return;
+      }
+      document.cookie = `valorantCookie=${value}; path=/; max-age=3600`; // Berlaku selama 1 jam
+      perbaruiTampilan();
+    });
+
+    // Set LocalStorage
+    document.getElementById("setLocalStorageBtn").addEventListener("click", function () {
+      const value = stateInput.value;
+      if (value.trim() === "") {
+        alert("Masukkan nilai terlebih dahulu!");
+        return;
+      }
+      localStorage.setItem("valorantLocalStorage", value);
+      perbaruiTampilan();
+    });
+
+    // Set SessionStorage
+    document.getElementById("setSessionStorageBtn").addEventListener("click", function () {
+      const value = stateInput.value;
+      if (value.trim() === "") {
+        alert("Masukkan nilai terlebih dahulu!");
+        return;
+      }
+      sessionStorage.setItem("valorantSessionStorage", value);
+      perbaruiTampilan();
+    });
+
+    // Fungsi untuk memperbarui tampilan nilai
+    function perbaruiTampilan() {
+      // Tampilkan Cookie
+      const cookies = document.cookie.split("; ").reduce((acc, cookie) => {
+        const [key, value] = cookie.split("=");
+        acc[key] = value;
+        return acc;
+      }, {});
+      cookieDisplay.textContent = cookies.valorantCookie || "Belum ada nilai";
+
+      // Tampilkan LocalStorage
+      const localStorageValue = localStorage.getItem("valorantLocalStorage");
+      localStorageDisplay.textContent = localStorageValue || "Belum ada nilai";
+
+      // Tampilkan SessionStorage
+      const sessionStorageValue = sessionStorage.getItem("valorantSessionStorage");
+      sessionStorageDisplay.textContent = sessionStorageValue || "Belum ada nilai";
+    }
+
+    // Inisialisasi tampilan
+    perbaruiTampilan();
+  </script>
+</body>
+
+</html>
+
+================================================================================
+
